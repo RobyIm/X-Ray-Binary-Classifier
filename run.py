@@ -17,20 +17,25 @@ from BinaryX_RayCNN import BinaryX_RayCNN
 from train import X_Ray_cnn_train_fn
 from test import X_Ray_cnn_test_fn
 
+# Define a Typer application
 app = typer.Typer()
-class Model(str, Enum):
-    har_cnn = 'X_Ray-cnn'
 
+# Enum for different model types
+class Model(str, Enum):
+    BinaryX_RayCNN = 'BinaryX-RayCNN'
+
+# Define a CLI command for running the model
 @app.command()
 def run(
     save_dir: Path = Path('best_model/'),
-    model_type: Model = 'X_Ray-cnn',
+    model_type: Model = 'BinaryX-RayCNN',
     train_model: bool = True,
     enable_checkpoints: bool = True,
     test_model: bool = True,
     test_model_path: Path = None,
 ):
     
+    # Create a path for saving the results
     SAVE_PATH = Path(f'{save_dir}/{model_type}/{datetime.now().strftime("%Y-%m-%d_%H%M%S")}')  
 
     if test_model_path is None:
@@ -43,38 +48,43 @@ def run(
 
     # Load the data
     train_loader, validation_loader, test_loader = get_loaders(train_data_dir, validation_data_dir, test_data_dir)
+    
+    if model_type == 'BinaryX-RayCNN':
+        print("hi")
+        # Initialize the BinaryX_RayCNN model
+        model = BinaryX_RayCNN()
 
-    model = BinaryX_RayCNN()
+        # Move the model to GPU if available
+        model = model.to(hp.DEVICE)
 
-    # Move the model to GPU if available
-    model = model.to(hp.DEVICE)
+        # Define loss function and optimizer
+        loss_fn = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(model.parameters())
+        if(train_model) :
+            # Train the model
+            X_Ray_cnn_train_fn(
+                train_loader,
+                validation_loader,
+                model,
+                optimizer,
+                loss_fn,
+                enable_checkpoints,
+                SAVE_PATH,
+                is_training=True
+            )
 
-    # Define loss function and optimizer
-    loss_fn = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters())
-    if(train_model) :
-        X_Ray_cnn_train_fn(
-            train_loader,
-            validation_loader,
+            # Set test_model_path to the best_model generated from the training, if it exists
+            new_model_path = Path(f'{SAVE_PATH}/best/best_model.pth')
+            if new_model_path.exists():
+                test_model_path = new_model_path
+
+        if(test_model) :
+          # Test the model
+            X_Ray_cnn_test_fn(
+            test_loader,
+            test_model_path,
             model,
-            optimizer,
-            loss_fn,
-            enable_checkpoints,
-            SAVE_PATH,
-            is_training=True
-        )
-
-        # Set test_model_path to the best_model generated from the training, if it exists
-        new_model_path = Path(f'{SAVE_PATH}/best/best_model.pth')
-        if new_model_path.exists():
-            test_model_path = new_model_path
-
-    if(test_model) :
-        X_Ray_cnn_test_fn(
-        test_loader,
-        test_model_path,
-        model,
-        )
+            )
 
 if __name__ == '__main__':
     app()
